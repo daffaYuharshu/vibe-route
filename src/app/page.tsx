@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2, AlertCircle, MapPin, MessageCircle, ChevronUp } from "lucide-react";
+import { Search, Loader2, MessageCircle, ChevronUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import { PlaceCard } from "@/components/PlaceCard";
@@ -12,6 +12,7 @@ import { useLocationStore } from "@/store/locationStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { PlaceListSkeleton, EmptyState, ErrorState } from "@/components/ui/states";
 import type { FoursquarePlace } from "@/lib/foursquare";
 
 export default function Home() {
@@ -39,7 +40,9 @@ export default function Home() {
   };
 
   const sidebar = (
-    <>
+    <div className="flex flex-col h-full animate-fade-in">
+      {/* h1 — accessible page title, visually hidden */}
+      <h1 className="sr-only">Eksplorasi — Vibe Route</h1>
       {/* Location SearchBox — sets global origin */}
       <div className="p-4 border-b border-[#E2E8F0]">
         <SearchBox
@@ -86,39 +89,27 @@ export default function Home() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-        {error && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#DC2626]"
-          >
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
+        {/* Error with retry */}
+        {error && !isLoading && (
+          <ErrorState
+            message={error}
+            onRetry={() => query.trim() && searchPlaces(query.trim(), centerLat, centerLng)}
+          />
         )}
 
+        {/* Empty */}
         {!isLoading && !error && places.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-            <div className="flex size-14 items-center justify-center rounded-full bg-[#DBEAFE]">
-              <MapPin className="size-7 text-[#1D4ED8]" aria-hidden="true" />
-            </div>
-            <p className="text-sm font-semibold text-[#0F172A]">Temukan tempat di sekitar Anda</p>
-            <p className="text-xs text-[#475569]">
-              {origin ? `Mencari di sekitar ${origin.label}` : "Set lokasi atau ketik kata kunci"}
-            </p>
-          </div>
+          <EmptyState
+            variant="search"
+            title="Temukan tempat di sekitar Anda"
+            description={origin ? `Mencari di sekitar ${origin.label}` : "Set lokasi atau ketik kata kunci"}
+          />
         )}
 
-        {isLoading && (
-          <div className="flex flex-col gap-2" aria-label="Memuat tempat…" aria-busy="true">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-24 rounded-xl border border-[#E2E8F0] bg-[#E2E8F0] animate-pulse"
-              />
-            ))}
-          </div>
-        )}
+        {/* Skeleton */}
+        {isLoading && <PlaceListSkeleton count={3} />}
 
+        {/* Place cards */}
         {!isLoading &&
           places.map((place) => (
             <PlaceCard key={place.fsq_id} place={place} onRoute={setSelectedPlace} />
@@ -129,10 +120,7 @@ export default function Home() {
             variant="outline"
             size="sm"
             className="mt-2 w-full border-[#E2E8F0] text-[#475569] hover:text-[#0F172A] h-9"
-            onClick={() => {
-              clearPlaces();
-              setQuery("");
-            }}
+            onClick={() => { clearPlaces(); setQuery(""); }}
           >
             Hapus hasil
           </Button>
@@ -177,7 +165,7 @@ export default function Home() {
           onClose={() => setIsChatOpen(false)}
         />
       </div>
-    </>
+    </div>
   );
 
   return (

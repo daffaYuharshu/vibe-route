@@ -1,14 +1,20 @@
 "use client";
 
+import type { Metadata } from "next";
 import { useState } from "react";
-import { Search, Loader2, AlertCircle, LayoutGrid, List } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import { PlaceCard } from "@/components/PlaceCard";
 import { usePlaces } from "@/hooks/usePlaces";
+import { useAppStore } from "@/store/locationStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import {
+  PlaceListSkeleton,
+  EmptyState,
+  ErrorState,
+} from "@/components/ui/states";
 import type { FoursquarePlace } from "@/lib/foursquare";
 
 // Preset category filters
@@ -23,18 +29,19 @@ const CATEGORIES = [
   { label: "⛽ SPBU", query: "SPBU" },
 ] as const;
 
-// Jakarta center
-const CENTER_LAT = -6.1751;
-const CENTER_LNG = 106.8272;
-
 export default function PlacesPage() {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("");
   const [selectedPlace, setSelectedPlace] = useState<FoursquarePlace | null>(null);
   const { places, isLoading, error, searchPlaces, clearPlaces } = usePlaces();
 
+  // Use origin from global store for proximity, fallback to Jakarta
+  const origin = useAppStore((s) => s.origin);
+  const centerLat = origin?.lat ?? -6.1751;
+  const centerLng = origin?.lng ?? 106.8272;
+
   const triggerSearch = (q: string) => {
-    if (q.trim()) searchPlaces(q.trim(), CENTER_LAT, CENTER_LNG);
+    if (q.trim()) searchPlaces(q.trim(), centerLat, centerLng);
     else clearPlaces();
   };
 
@@ -51,7 +58,10 @@ export default function PlacesPage() {
   };
 
   const sidebar = (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col gap-0 animate-fade-in">
+      {/* Page heading (h1) — visually hidden but accessible */}
+      <h1 className="sr-only">Eksplorasi Tempat</h1>
+
       {/* Search */}
       <form onSubmit={handleSearch} className="p-4 border-b border-[#E2E8F0] flex gap-2">
         <div className="flex-1">
@@ -64,7 +74,7 @@ export default function PlacesPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Nama tempat atau kategori…"
-            className="h-9 text-sm border-[#E2E8F0] bg-white"
+            className="h-9 text-sm border-[#E2E8F0] bg-white focus-visible:ring-[#1D4ED8]"
           />
         </div>
         <Button
@@ -75,7 +85,7 @@ export default function PlacesPage() {
           aria-label="Cari tempat"
         >
           {isLoading ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="size-4 animate-spin text-white" aria-hidden="true" />
           ) : (
             <Search className="size-4" aria-hidden="true" />
           )}
@@ -86,7 +96,7 @@ export default function PlacesPage() {
       <div
         className="flex flex-wrap gap-1.5 px-4 py-3 border-b border-[#E2E8F0]"
         role="group"
-        aria-label="Filter kategori"
+        aria-label="Filter kategori tempat"
       >
         {CATEGORIES.map((cat) => {
           const isActive = activeCategory === cat.query;
@@ -107,11 +117,12 @@ export default function PlacesPage() {
         })}
       </div>
 
-      {/* Results count */}
+      {/* Results count bar */}
       {places.length > 0 && !isLoading && (
         <div className="flex items-center justify-between px-4 py-2 border-b border-[#E2E8F0]">
           <span className="text-xs text-[#64748B]">
             {places.length} tempat ditemukan
+            {origin && <span className="text-[#94A3B8]"> · dekat {origin.label}</span>}
           </span>
           <Button
             variant="ghost"
@@ -126,39 +137,27 @@ export default function PlacesPage() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-        {error && (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#DC2626]"
-          >
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
+        {/* Error state with retry */}
+        {error && !isLoading && (
+          <ErrorState
+            message={error}
+            onRetry={() => triggerSearch(query)}
+          />
         )}
 
+        {/* Empty state */}
         {!isLoading && !error && places.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-            <div className="flex size-14 items-center justify-center rounded-full bg-[#DBEAFE]">
-              <LayoutGrid className="size-7 text-[#1D4ED8]" aria-hidden="true" />
-            </div>
-            <p className="text-sm font-semibold text-[#0F172A]">Eksplorasi Tempat</p>
-            <p className="text-xs text-[#475569]">
-              Pilih kategori atau ketik pencarian untuk menemukan tempat
-            </p>
-          </div>
+          <EmptyState
+            variant="places"
+            title="Eksplorasi Tempat"
+            description="Pilih kategori atau ketik pencarian untuk menemukan tempat di sekitar Anda"
+          />
         )}
 
-        {isLoading && (
-          <div className="flex flex-col gap-2" aria-label="Memuat tempat…" aria-busy="true">
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="h-24 rounded-xl border border-[#E2E8F0] bg-[#E2E8F0] animate-pulse"
-              />
-            ))}
-          </div>
-        )}
+        {/* Skeleton loading */}
+        {isLoading && <PlaceListSkeleton count={4} />}
 
+        {/* Place cards */}
         {!isLoading &&
           places.map((place) => (
             <PlaceCard

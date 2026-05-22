@@ -25,7 +25,7 @@ export function PlaceCard({ place, onRoute }: PlaceCardProps) {
 
   return (
     <article
-      className="flex flex-col gap-2 rounded-xl border border-border bg-white p-3 transition-colors hover:border-primary"
+      className="flex flex-col gap-2 rounded-xl border border-[#E2E8F0] bg-white p-3 card-hover"
       aria-label={`Tempat: ${place.name}`}
     >
       {/* Header: icon + name + badge */}

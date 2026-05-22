@@ -182,3 +182,44 @@
     color: #FFFFFF;
   }
 }
+
+/* ── Animations ────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-16px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@layer utilities {
+  /* Page entrance — 200ms ease-out opacity */
+  .animate-fade-in {
+    animation: fade-in 200ms ease-out both;
+  }
+
+  /* Sidebar / panel slide-in from left — 250ms */
+  .animate-slide-in-left {
+    animation: slide-in-left 250ms ease-out both;
+  }
+
+  /* Card hover border-color transition — 150ms, no scale/shadow */
+  .card-hover {
+    transition: border-color 150ms ease;
+  }
+  .card-hover:hover { border-color: var(--color-primary); }
+}
+
+/* ── prefers-reduced-motion (WCAG 2.3.3) ──────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
