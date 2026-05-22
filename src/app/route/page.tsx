@@ -1,84 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { Navigation, Loader2, AlertCircle, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowRight, Navigation, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import { SearchBox } from "@/components/SearchBox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { useLocationStore } from "@/store/locationStore";
-
-interface RouteResult {
-  distanceKm: number;
-  durationMin: number;
-  geometry: GeoJSON.LineString;
-}
-
-const OSRM_BASE =
-  process.env.NEXT_PUBLIC_OSRM_BASE_URL ?? "https://router.project-osrm.org";
-
-async function fetchRoute(
-  originLat: number,
-  originLng: number,
-  destLat: number,
-  destLng: number
-): Promise<RouteResult> {
-  const url = `${OSRM_BASE}/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`OSRM error ${res.status}`);
-  const data = await res.json();
-  const route = data.routes?.[0];
-  if (!route) throw new Error("Tidak ada rute ditemukan");
-  return {
-    distanceKm: route.distance / 1000,
-    durationMin: route.duration / 60,
-    geometry: route.geometry as GeoJSON.LineString,
-  };
-}
+import { useAppStore } from "@/store/locationStore";
+import { useRoute } from "@/hooks/useRoute";
 
 export default function RoutePage() {
-  const { origin, destination, setOrigin, setDestination } = useLocationStore();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<RouteResult | null>(null);
+  const { origin, destination, setOrigin, setDestination } = useAppStore();
+  const { result, isLoading, error, calculateRoute, clearRoute } = useRoute();
 
   const handleCalculate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!origin || !destination) {
-      setError("Pilih titik asal dan tujuan terlebih dahulu.");
-      return;
-    }
-    setError(null);
-    setIsLoading(true);
-    try {
-      const route = await fetchRoute(
-        origin.lat,
-        origin.lng,
-        destination.lat,
-        destination.lng
-      );
-      setResult(route);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan.");
-    } finally {
-      setIsLoading(false);
-    }
+    if (!origin || !destination) return;
+    await calculateRoute(origin, destination);
   };
 
   const sidebar = (
     <div className="flex flex-col gap-0">
       <form onSubmit={handleCalculate} className="p-4 flex flex-col gap-4">
-        {/* Origin SearchBox */}
         <SearchBox
           id="route-origin"
           label="Titik Asal"
           value={origin}
-          onChange={(pt) => {
-            setOrigin(pt);
-            setResult(null);
-          }}
+          onChange={(pt) => { setOrigin(pt); clearRoute(); }}
           placeholder="Cari lokasi asal…"
           showGeolocate
         />
@@ -89,15 +38,11 @@ export default function RoutePage() {
           <Separator className="flex-1" />
         </div>
 
-        {/* Destination SearchBox */}
         <SearchBox
           id="route-destination"
           label="Titik Tujuan"
           value={destination}
-          onChange={(pt) => {
-            setDestination(pt);
-            setResult(null);
-          }}
+          onChange={(pt) => { setDestination(pt); clearRoute(); }}
           placeholder="Cari lokasi tujuan…"
         />
 
@@ -116,7 +61,6 @@ export default function RoutePage() {
         </Button>
       </form>
 
-      {/* Error */}
       {error && (
         <div
           role="alert"
@@ -127,17 +71,14 @@ export default function RoutePage() {
         </div>
       )}
 
-      {/* Result */}
       {result && !isLoading && (
         <div className="px-4 pb-4 flex flex-col gap-3">
           <Separator />
           <div>
             <h2 className="text-sm font-semibold text-[#0F172A]">Hasil Rute</h2>
-            {origin && destination && (
-              <p className="text-xs text-[#64748B] mt-0.5 line-clamp-1">
-                {origin.label} → {destination.label}
-              </p>
-            )}
+            <p className="text-xs text-[#64748B] mt-0.5 line-clamp-1">
+              {result.originLabel} → {result.destinationLabel}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Card className="p-3 border-[#E2E8F0] bg-[#F8FAFC]">

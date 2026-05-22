@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
+import { useAppStore } from '@/store/locationStore';
 import type { FoursquarePlace } from '@/lib/foursquare';
 
 interface UsePlacesReturn {
@@ -11,44 +12,51 @@ interface UsePlacesReturn {
   clearPlaces: () => void;
 }
 
+/**
+ * Hook for searching nearby places via the /api/places proxy (Foursquare under the hood).
+ * Writes results to the global Zustand store (places[]).
+ */
 export function usePlaces(): UsePlacesReturn {
-  const [places, setPlaces] = useState<FoursquarePlace[]>([]);
+  const { places, setPlaces, clearPlaces: storeClear } = useAppStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const searchPlaces = useCallback(async (query: string, lat: number, lng: number) => {
-    setIsLoading(true);
-    setError(null);
+  const searchPlaces = useCallback(
+    async (query: string, lat: number, lng: number) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const params = new URLSearchParams({
-        query,
-        lat: String(lat),
-        lng: String(lng),
-        radius: '2000',
-        limit: '10',
-      });
+      try {
+        const params = new URLSearchParams({
+          query,
+          lat: String(lat),
+          lng: String(lng),
+          radius: '2000',
+          limit: '10',
+        });
 
-      const res = await fetch(`/api/places?${params.toString()}`);
-      const data = await res.json();
+        const res = await fetch(`/api/places?${params.toString()}`);
+        const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal mengambil data tempat');
+        if (!res.ok) {
+          throw new Error(data.error ?? 'Gagal mengambil data tempat');
+        }
+
+        setPlaces(data.places ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Terjadi kesalahan');
+        setPlaces([]);
+      } finally {
+        setIsLoading(false);
       }
-
-      setPlaces(data.places ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan');
-      setPlaces([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [setPlaces]
+  );
 
   const clearPlaces = useCallback(() => {
-    setPlaces([]);
+    storeClear();
     setError(null);
-  }, []);
+  }, [storeClear]);
 
   return { places, isLoading, error, searchPlaces, clearPlaces };
 }
