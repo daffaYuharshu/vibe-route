@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useAppStore } from "@/store/locationStore";
 import { useRoute } from "@/hooks/useRoute";
+import { RouteSkeleton, ErrorState, EmptyState } from "@/components/ui/states";
 
 export default function RoutePage() {
   const { origin, destination, setOrigin, setDestination } = useAppStore();
@@ -21,7 +22,10 @@ export default function RoutePage() {
   };
 
   const sidebar = (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col gap-0 animate-fade-in">
+      {/* h1 — visually hidden, required for WCAG heading hierarchy */}
+      <h1 className="sr-only">Kalkulasi Rute Perjalanan</h1>
+
       <form onSubmit={handleCalculate} className="p-4 flex flex-col gap-4">
         <SearchBox
           id="route-origin"
@@ -32,9 +36,9 @@ export default function RoutePage() {
           showGeolocate
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" aria-hidden="true">
           <Separator className="flex-1" />
-          <ArrowRight className="size-4 text-[#94A3B8] shrink-0" aria-hidden="true" />
+          <ArrowRight className="size-4 text-[#94A3B8] shrink-0" />
           <Separator className="flex-1" />
         </div>
 
@@ -61,22 +65,40 @@ export default function RoutePage() {
         </Button>
       </form>
 
-      {error && (
-        <div
-          role="alert"
-          className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-3 text-sm text-[#DC2626]"
-        >
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>{error}</span>
+      {/* Error state with retry */}
+      {error && !isLoading && (
+        <div className="px-4 pb-4">
+          <ErrorState
+            message={error}
+            onRetry={() => origin && destination && calculateRoute(origin, destination)}
+          />
         </div>
       )}
 
+      {/* Skeleton while loading */}
+      {isLoading && (
+        <div className="px-4 pb-4">
+          <Separator className="mb-3" />
+          <RouteSkeleton />
+        </div>
+      )}
+
+      {/* Empty state — no origin/destination set yet */}
+      {!result && !isLoading && !error && !origin && !destination && (
+        <EmptyState
+          variant="route"
+          title="Hitung Rute"
+          description="Masukkan titik asal dan tujuan, lalu tekan Hitung Rute untuk melihat jalur perjalanan"
+        />
+      )}
+
+      {/* Result cards */}
       {result && !isLoading && (
-        <div className="px-4 pb-4 flex flex-col gap-3">
+        <div className="px-4 pb-4 flex flex-col gap-3 animate-fade-in">
           <Separator />
           <div>
             <h2 className="text-sm font-semibold text-[#0F172A]">Hasil Rute</h2>
-            <p className="text-xs text-[#64748B] mt-0.5 line-clamp-1">
+            <p className="text-xs text-[#64748B] mt-0.5 line-clamp-2">
               {result.originLabel} → {result.destinationLabel}
             </p>
           </div>
