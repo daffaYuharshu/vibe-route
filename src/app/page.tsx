@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Search, Loader2, AlertCircle, MapPin, MessageCircle, ChevronUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import { PlaceCard } from "@/components/PlaceCard";
 import { AssistantPanel } from "@/components/AssistantPanel";
+import { SearchBox } from "@/components/SearchBox";
 import { usePlaces } from "@/hooks/usePlaces";
+import { useLocationStore } from "@/store/locationStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import type { FoursquarePlace } from "@/lib/foursquare";
 
 export default function Home() {
@@ -16,11 +19,13 @@ export default function Home() {
   const { places, isLoading, error, searchPlaces, clearPlaces } = usePlaces();
   const [selectedPlace, setSelectedPlace] = useState<FoursquarePlace | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Default center: Jakarta
-  const centerLat = -6.1751;
-  const centerLng = 106.8272;
+  // Global location state from Zustand
+  const { origin, setOrigin } = useLocationStore();
+
+  // Default center: Jakarta (or from stored origin)
+  const centerLat = origin?.lat ?? -6.1751;
+  const centerLng = origin?.lng ?? 106.8272;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +40,21 @@ export default function Home() {
 
   const sidebar = (
     <>
-      {/* Search Form */}
+      {/* Location SearchBox — sets global origin */}
+      <div className="p-4 border-b border-[#E2E8F0]">
+        <SearchBox
+          id="home-location"
+          label="Lokasi Saya"
+          value={origin}
+          onChange={setOrigin}
+          placeholder="Set lokasi kamu…"
+          showGeolocate
+        />
+      </div>
+
+      <Separator />
+
+      {/* Place search form */}
       <form onSubmit={handleSearch} className="p-4 border-b border-[#E2E8F0] flex gap-2">
         <div className="flex-1">
           <label htmlFor="place-search" className="sr-only">
@@ -43,7 +62,6 @@ export default function Home() {
           </label>
           <Input
             id="place-search"
-            ref={inputRef}
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -84,7 +102,9 @@ export default function Home() {
               <MapPin className="size-7 text-[#1D4ED8]" aria-hidden="true" />
             </div>
             <p className="text-sm font-semibold text-[#0F172A]">Temukan tempat di sekitar Anda</p>
-            <p className="text-xs text-[#475569]">Ketik kata kunci dan tekan cari</p>
+            <p className="text-xs text-[#475569]">
+              {origin ? `Mencari di sekitar ${origin.label}` : "Set lokasi atau ketik kata kunci"}
+            </p>
           </div>
         )}
 
@@ -134,7 +154,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* AI Assistant toggle */}
+      {/* AI Assistant */}
       <div className="border-t border-[#E2E8F0] shrink-0">
         {!isChatOpen && (
           <button
