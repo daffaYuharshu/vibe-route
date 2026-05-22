@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef } from 'react';
-import { Search, Loader2, AlertCircle, MapPin } from 'lucide-react';
+import { Search, Loader2, AlertCircle, MapPin, MessageCircle, ChevronUp } from 'lucide-react';
 import { MapView } from "@/components/MapView";
 import { PlaceCard } from "@/components/PlaceCard";
+import { AssistantPanel } from "@/components/AssistantPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { Button } from '@/components/ui/button';
 import type { FoursquarePlace } from '@/lib/foursquare';
@@ -12,6 +13,7 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const { places, isLoading, error, searchPlaces, clearPlaces } = usePlaces();
   const [selectedPlace, setSelectedPlace] = useState<FoursquarePlace | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Default center: Jakarta
@@ -29,6 +31,13 @@ export default function Home() {
     setSelectedPlace(place);
   };
 
+  // Location context to send to Gemini
+  const locationContext = {
+    lat: centerLat,
+    lng: centerLng,
+    places: places.length > 0 ? places : undefined,
+  };
+
   return (
     <main className="flex h-screen w-full flex-col md:flex-row bg-background overflow-hidden">
       {/* ── Sidebar ── */}
@@ -37,13 +46,34 @@ export default function Home() {
         style={{ boxShadow: '2px 0 8px rgba(0,0,0,0.06)' }}
       >
         {/* Header */}
-        <div className="p-4 border-b border-border">
-          <h1 className="text-xl font-bold text-[#0F172A] leading-tight">
-            Vibe Route
-          </h1>
-          <p className="text-xs text-[#475569] mt-0.5">
-            Eksplorasi tempat & rute perjalanan
-          </p>
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[#0F172A] leading-tight">
+              Vibe Route
+            </h1>
+            <p className="text-xs text-[#475569] mt-0.5">
+              Eksplorasi tempat &amp; rute perjalanan
+            </p>
+          </div>
+          {/* AI Assistant toggle button */}
+          <button
+            id="btn-toggle-chat"
+            onClick={() => setIsChatOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              isChatOpen
+                ? 'bg-[#1D4ED8] text-white'
+                : 'bg-[#DBEAFE] text-[#1D4ED8] hover:bg-[#BFDBFE]'
+            }`}
+            aria-label={isChatOpen ? 'Tutup asisten AI' : 'Buka asisten AI'}
+            aria-expanded={isChatOpen}
+          >
+            <MessageCircle className="size-3.5" aria-hidden="true" />
+            <span>Asisten</span>
+            <ChevronUp
+              className={`size-3 transition-transform ${isChatOpen ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
         </div>
 
         {/* Search Form */}
@@ -148,6 +178,13 @@ export default function Home() {
             </button>
           </div>
         )}
+
+        {/* AI Assistant Panel */}
+        <AssistantPanel
+          locationContext={locationContext}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+        />
       </aside>
 
       {/* ── Map ── */}
