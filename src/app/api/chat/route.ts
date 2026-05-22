@@ -31,15 +31,26 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       systemInstruction: buildSystemPrompt(locationContext),
     });
 
-    // Build history (all but last message)
-    const history = messages.slice(0, -1).map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+    // Filter: only include user messages in history, exclude the assistant welcome message
+    // Gemini chat history must alternate user/model and start with user
+    // Exclude last message (that's what we're sending now)
+    const priorMessages = messages.slice(0, -1);
+    
+    // Build valid history: only include pairs where user came before assistant
+    // Drop leading assistant messages (e.g. welcome message)
+    const history: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
+    for (const m of priorMessages) {
+      // Skip assistant-only leading messages
+      if (history.length === 0 && m.role === 'assistant') continue;
+      history.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      });
+    }
 
     const lastMessage = messages[messages.length - 1];
 
@@ -56,13 +67,13 @@ export async function POST(req: NextRequest) {
           for await (const chunk of streamResult.stream) {
             const text = chunk.text();
             if (text) {
-              // SSE format: "data: <text>\n\n"
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         } catch (err) {
+          console.error('[chat/route] Stream error:', err);
           controller.error(err);
         }
       },
@@ -76,9 +87,10 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[chat/route] Error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[chat/route] Error:', message);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
