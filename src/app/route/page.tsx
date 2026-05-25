@@ -129,7 +129,11 @@ export default function RoutePage() {
 
   return (
     <AppShell sidebar={sidebar} pageTitle="Rute">
-      <MapView routeGeometry={result?.geometry ?? null} />
+      <MapView
+        routeGeometry={result?.geometry ?? null}
+        origin={origin}
+        destination={destination}
+      />
     </AppShell>
   );
 }
