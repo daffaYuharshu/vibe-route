@@ -12,7 +12,17 @@ export async function GET(request: NextRequest) {
 
   if (!query || !lat || !lng) {
     return NextResponse.json(
-      { error: 'Missing required parameters: query, lat, lng' },
+      { error: 'Parameter query, lat, lng diperlukan' },
+      { status: 400 }
+    );
+  }
+
+  const latNum = parseFloat(lat);
+  const lngNum = parseFloat(lng);
+
+  if (isNaN(latNum) || isNaN(lngNum)) {
+    return NextResponse.json(
+      { error: 'Nilai lat/lng tidak valid' },
       { status: 400 }
     );
   }
@@ -20,18 +30,20 @@ export async function GET(request: NextRequest) {
   try {
     const places = await searchPlaces({
       query,
-      lat: parseFloat(lat),
-      lng: parseFloat(lng),
-      radius: radius ? parseInt(radius) : 1000,
+      lat: latNum,
+      lng: lngNum,
+      radius: radius ? parseInt(radius) : 2000,
       limit: limit ? parseInt(limit) : 10,
     });
 
     return NextResponse.json({ places });
   } catch (error) {
-    console.error('[API /places]', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch places' },
-      { status: 500 }
-    );
+    console.error('[API /places] Error:', error);
+
+    // Propagate the descriptive error message from foursquare.ts to the client
+    const message =
+      error instanceof Error ? error.message : 'Gagal mengambil data tempat';
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
