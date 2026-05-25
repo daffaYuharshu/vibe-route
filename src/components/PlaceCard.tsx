@@ -1,16 +1,19 @@
 "use client";
 
-import { MapPin, Star, Navigation } from 'lucide-react';
+import { MapPin, Star, Navigation, Loader2 } from 'lucide-react';
 import type { FoursquarePlace } from '@/lib/foursquare';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface PlaceCardProps {
   place: FoursquarePlace;
+  /** Called when user clicks "Buat Rute ke Sini". If undefined, button is hidden. */
   onRoute?: (place: FoursquarePlace) => void;
+  /** Shows loading spinner on this card's route button */
+  isRoutingLoading?: boolean;
 }
 
-export function PlaceCard({ place, onRoute }: PlaceCardProps) {
+export function PlaceCard({ place, onRoute, isRoutingLoading = false }: PlaceCardProps) {
   const category = place.categories?.[0];
   const iconUrl = category
     ? `${category.icon.prefix}64${category.icon.suffix}`
@@ -79,17 +82,22 @@ export function PlaceCard({ place, onRoute }: PlaceCardProps) {
         )}
       </div>
 
-      {/* Action */}
+      {/* "Buat Rute" button — only rendered when onRoute is provided */}
       {onRoute && (
         <Button
           size="sm"
           variant="outline"
-          className="mt-1 w-full h-8 text-xs border-primary text-primary hover:bg-primary hover:text-white"
+          className="mt-1 w-full h-8 text-xs border-primary text-primary hover:bg-primary hover:text-white disabled:opacity-60"
           onClick={() => onRoute(place)}
+          disabled={isRoutingLoading}
           aria-label={`Buat rute ke ${place.name}`}
         >
-          <Navigation className="mr-1.5 size-3" aria-hidden="true" />
-          Buat rute ke sini
+          {isRoutingLoading ? (
+            <Loader2 className="mr-1.5 size-3 animate-spin" aria-hidden="true" />
+          ) : (
+            <Navigation className="mr-1.5 size-3" aria-hidden="true" />
+          )}
+          {isRoutingLoading ? 'Menghitung…' : 'Buat rute ke sini'}
         </Button>
       )}
     </article>

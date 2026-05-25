@@ -10,10 +10,21 @@ import { Separator } from "@/components/ui/separator";
 import { useAppStore } from "@/store/locationStore";
 import { useRoute } from "@/hooks/useRoute";
 import { RouteSkeleton, ErrorState, EmptyState } from "@/components/ui/states";
+import { useEffect } from "react";
 
 export default function RoutePage() {
   const { origin, destination, setOrigin, setDestination } = useAppStore();
   const { result, isLoading, error, calculateRoute, clearRoute } = useRoute();
+
+  // Auto-calculate when page is loaded with both points pre-filled
+  // (e.g. navigated here from a PlaceCard)
+  useEffect(() => {
+    if (origin && destination && !result && !isLoading) {
+      calculateRoute(origin, destination);
+    }
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCalculate = async (e: React.FormEvent) => {
     e.preventDefault();

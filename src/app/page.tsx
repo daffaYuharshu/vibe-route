@@ -1,36 +1,59 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2, MessageCircle, ChevronUp } from "lucide-react";
+import { Search, Loader2, MessageCircle, ChevronUp, X, Navigation } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import { PlaceCard } from "@/components/PlaceCard";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { SearchBox } from "@/components/SearchBox";
 import { usePlaces } from "@/hooks/usePlaces";
-import { useLocationStore } from "@/store/locationStore";
+import { useRoute } from "@/hooks/useRoute";
+import { useAppStore, useLocationStore } from "@/store/locationStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { PlaceListSkeleton, EmptyState, ErrorState } from "@/components/ui/states";
 import type { FoursquarePlace } from "@/lib/foursquare";
+import type { GeoPoint } from "@/store/locationStore";
 
 export default function Home() {
   const [query, setQuery] = useState("");
-  const { places, isLoading, error, searchPlaces, clearPlaces } = usePlaces();
-  const [selectedPlace, setSelectedPlace] = useState<FoursquarePlace | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  // Global location state from Zustand
+  // Global location state
   const { origin, setOrigin } = useLocationStore();
+  const { destination, setDestination } = useAppStore();
 
-  // Default center: Jakarta (or from stored origin)
+  // Places search
+  const { places, isLoading, error, searchPlaces, clearPlaces } = usePlaces();
+
+  // In-page route calculation
+  const { result: routeResult, isLoading: isRoutingLoading, error: routeError, calculateRoute, clearRoute } = useRoute();
+
   const centerLat = origin?.lat ?? -6.1751;
   const centerLng = origin?.lng ?? 106.8272;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) searchPlaces(query.trim(), centerLat, centerLng);
+  };
+
+  /** Called when user clicks "Buat Rute ke Sini" on a PlaceCard */
+  const handleRouteToPlace = async (place: FoursquarePlace) => {
+    if (!origin) return; // button is disabled when no origin — but guard anyway
+    const dest: GeoPoint = {
+      lat: place.geocodes.main.latitude,
+      lng: place.geocodes.main.longitude,
+      label: place.name,
+    };
+    setDestination(dest);
+    await calculateRoute(origin, dest);
+  };
+
+  const handleClearRoute = () => {
+    clearRoute();
+    setDestination(null);
   };
 
   const locationContext = {
@@ -43,16 +66,22 @@ export default function Home() {
     <div className="flex flex-col h-full animate-fade-in">
       {/* h1 — accessible page title, visually hidden */}
       <h1 className="sr-only">Eksplorasi — Vibe Route</h1>
+
       {/* Location SearchBox — sets global origin */}
       <div className="p-4 border-b border-[#E2E8F0]">
         <SearchBox
           id="home-location"
           label="Lokasi Saya"
           value={origin}
-          onChange={setOrigin}
+          onChange={(pt) => { setOrigin(pt); handleClearRoute(); }}
           placeholder="Set lokasi kamu…"
           showGeolocate
         />
+        {!origin && (
+          <p className="mt-1.5 text-[10px] text-[#94A3B8]">
+            ⚠ Set lokasi untuk mengaktifkan fitur Buat Rute
+          </p>
+        )}
       </div>
 
       <Separator />
@@ -60,9 +89,7 @@ export default function Home() {
       {/* Place search form */}
       <form onSubmit={handleSearch} className="p-4 border-b border-[#E2E8F0] flex gap-2">
         <div className="flex-1">
-          <label htmlFor="place-search" className="sr-only">
-            Cari tempat
-          </label>
+          <label htmlFor="place-search" className="sr-only">Cari tempat</label>
           <Input
             id="place-search"
             type="search"
@@ -89,15 +116,9 @@ export default function Home() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-        {/* Error with retry */}
         {error && !isLoading && (
-          <ErrorState
-            message={error}
-            onRetry={() => query.trim() && searchPlaces(query.trim(), centerLat, centerLng)}
-          />
+          <ErrorState message={error} onRetry={() => query.trim() && searchPlaces(query.trim(), centerLat, centerLng)} />
         )}
-
-        {/* Empty */}
         {!isLoading && !error && places.length === 0 && (
           <EmptyState
             variant="search"
@@ -105,14 +126,17 @@ export default function Home() {
             description={origin ? `Mencari di sekitar ${origin.label}` : "Set lokasi atau ketik kata kunci"}
           />
         )}
-
-        {/* Skeleton */}
         {isLoading && <PlaceListSkeleton count={3} />}
 
-        {/* Place cards */}
+        {/* Place cards — onRoute only active when origin is set */}
         {!isLoading &&
           places.map((place) => (
-            <PlaceCard key={place.fsq_id} place={place} onRoute={setSelectedPlace} />
+            <PlaceCard
+              key={place.fsq_id}
+              place={place}
+              onRoute={origin ? handleRouteToPlace : undefined}
+              isRoutingLoading={isRoutingLoading && destination?.label === place.name}
+            />
           ))}
 
         {places.length > 0 && !isLoading && (
@@ -127,18 +151,51 @@ export default function Home() {
         )}
       </div>
 
-      {/* Selected route banner */}
-      {selectedPlace && (
-        <div className="border-t border-[#E2E8F0] p-4 bg-[#DBEAFE] shrink-0">
-          <p className="text-xs font-semibold text-[#1D4ED8] mb-0.5">Rute ke:</p>
-          <p className="text-sm font-medium text-[#0F172A] truncate">{selectedPlace.name}</p>
-          <button
-            className="mt-1 text-xs text-[#475569] underline tap-sm"
-            onClick={() => setSelectedPlace(null)}
-            aria-label="Batalkan pilihan rute"
-          >
-            Batalkan
-          </button>
+      {/* ── Route result panel ─────────────────────────── */}
+      {(routeResult || isRoutingLoading || routeError) && (
+        <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] shrink-0 p-4">
+          {isRoutingLoading && (
+            <div className="flex items-center gap-2 text-sm text-[#64748B]">
+              <Loader2 className="size-4 animate-spin text-[#1D4ED8]" />
+              Menghitung rute…
+            </div>
+          )}
+          {routeError && !isRoutingLoading && (
+            <p className="text-xs text-red-500">{routeError}</p>
+          )}
+          {routeResult && !isRoutingLoading && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold text-[#1D4ED8] uppercase tracking-wide">Rute ke</p>
+                  <p className="text-sm font-medium text-[#0F172A] line-clamp-1">{routeResult.destinationLabel}</p>
+                </div>
+                <button
+                  onClick={handleClearRoute}
+                  className="text-[#94A3B8] hover:text-[#475569] transition-colors"
+                  aria-label="Hapus rute"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white rounded-lg border border-[#E2E8F0] p-2 text-center">
+                  <p className="text-[10px] text-[#64748B] font-medium uppercase tracking-wide">Jarak</p>
+                  <p className="text-base font-bold text-[#0F172A]">
+                    {routeResult.distanceKm.toFixed(1)}{" "}
+                    <span className="text-xs font-normal text-[#475569]">km</span>
+                  </p>
+                </div>
+                <div className="bg-white rounded-lg border border-[#E2E8F0] p-2 text-center">
+                  <p className="text-[10px] text-[#64748B] font-medium uppercase tracking-wide">Estimasi</p>
+                  <p className="text-base font-bold text-[#0F172A]">
+                    {Math.round(routeResult.durationMin)}{" "}
+                    <span className="text-xs font-normal text-[#475569]">menit</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -170,7 +227,11 @@ export default function Home() {
 
   return (
     <AppShell sidebar={sidebar} pageTitle="Eksplorasi">
-      <MapView />
+      <MapView
+        routeGeometry={routeResult?.geometry ?? null}
+        origin={origin}
+        destination={destination}
+      />
     </AppShell>
   );
 }
