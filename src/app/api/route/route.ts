@@ -26,7 +26,11 @@ export async function GET(req: NextRequest) {
     .map((c) => c.join(','))
     .join(';');
 
-  const url = `${OSRM_BASE}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+  const url =
+    `${OSRM_BASE}/route/v1/driving/${coords}` +
+    `?overview=full&geometries=geojson&steps=false&annotations=false`;
+
+  console.log('[route] OSRM request:', url);
 
   try {
     const res = await fetch(url, { next: { revalidate: 0 } });

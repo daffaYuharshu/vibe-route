@@ -1,12 +1,12 @@
 "use client";
 
-import type { Metadata } from "next";
 import { useState } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import { PlaceCard } from "@/components/PlaceCard";
 import { usePlaces } from "@/hooks/usePlaces";
+import { useRoute } from "@/hooks/useRoute";
 import { useAppStore } from "@/store/locationStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
   ErrorState,
 } from "@/components/ui/states";
 import type { FoursquarePlace } from "@/lib/foursquare";
+import type { GeoPoint } from "@/store/locationStore";
 
 // Preset category filters
 const CATEGORIES = [
@@ -32,11 +33,17 @@ const CATEGORIES = [
 export default function PlacesPage() {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("");
-  const [selectedPlace, setSelectedPlace] = useState<FoursquarePlace | null>(null);
+
+  // Global state
+  const { origin, destination, setDestination } = useAppStore();
+
+  // Places search
   const { places, isLoading, error, searchPlaces, clearPlaces } = usePlaces();
 
-  // Use origin from global store for proximity, fallback to Jakarta
-  const origin = useAppStore((s) => s.origin);
+  // In-page route calculation
+  const { result: routeResult, isLoading: isRoutingLoading, error: routeError, calculateRoute, clearRoute } = useRoute();
+
+  // Default search center: user's origin or Jakarta
   const centerLat = origin?.lat ?? -6.1751;
   const centerLng = origin?.lng ?? 106.8272;
 
@@ -57,17 +64,41 @@ export default function PlacesPage() {
     triggerSearch(cat.query);
   };
 
+  /** Called when user clicks "Buat Rute ke Sini" on a PlaceCard */
+  const handleRouteToPlace = async (place: FoursquarePlace) => {
+    if (!origin) return;
+    const dest: GeoPoint = {
+      lat: place.geocodes.main.latitude,
+      lng: place.geocodes.main.longitude,
+      label: place.name,
+    };
+    setDestination(dest);
+    await calculateRoute(origin, dest);
+  };
+
+  const handleClearRoute = () => {
+    clearRoute();
+    setDestination(null);
+  };
+
   const sidebar = (
     <div className="flex flex-col gap-0 animate-fade-in">
       {/* Page heading (h1) — visually hidden but accessible */}
       <h1 className="sr-only">Eksplorasi Tempat</h1>
 
+      {/* Origin hint when not set */}
+      {!origin && (
+        <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
+          <p className="text-xs text-amber-700">
+            ⚠ Set lokasi di menu Eksplorasi untuk mengaktifkan Buat Rute
+          </p>
+        </div>
+      )}
+
       {/* Search */}
       <form onSubmit={handleSearch} className="p-4 border-b border-[#E2E8F0] flex gap-2">
         <div className="flex-1">
-          <label htmlFor="places-search" className="sr-only">
-            Cari tempat
-          </label>
+          <label htmlFor="places-search" className="sr-only">Cari tempat</label>
           <Input
             id="places-search"
             type="search"
@@ -128,7 +159,7 @@ export default function PlacesPage() {
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs text-[#94A3B8] hover:text-[#475569] tap-sm"
-            onClick={() => { clearPlaces(); setQuery(""); setActiveCategory(""); }}
+            onClick={() => { clearPlaces(); setQuery(""); setActiveCategory(""); handleClearRoute(); }}
           >
             Hapus
           </Button>
@@ -137,15 +168,9 @@ export default function PlacesPage() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-        {/* Error state with retry */}
         {error && !isLoading && (
-          <ErrorState
-            message={error}
-            onRetry={() => triggerSearch(query)}
-          />
+          <ErrorState message={error} onRetry={() => triggerSearch(query)} />
         )}
-
-        {/* Empty state */}
         {!isLoading && !error && places.length === 0 && (
           <EmptyState
             variant="places"
@@ -153,42 +178,65 @@ export default function PlacesPage() {
             description="Pilih kategori atau ketik pencarian untuk menemukan tempat di sekitar Anda"
           />
         )}
-
-        {/* Skeleton loading */}
         {isLoading && <PlaceListSkeleton count={4} />}
 
-        {/* Place cards */}
+        {/* Place cards — Buat Rute only visible when origin is set */}
         {!isLoading &&
           places.map((place) => (
             <PlaceCard
               key={place.fsq_id}
               place={place}
-              onRoute={setSelectedPlace}
+              onRoute={origin ? handleRouteToPlace : undefined}
+              isRoutingLoading={isRoutingLoading && destination?.label === place.name}
             />
           ))}
       </div>
 
-      {/* Selected place banner */}
-      {selectedPlace && (
-        <div className="border-t border-[#E2E8F0] p-4 bg-[#DBEAFE] shrink-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-[#1D4ED8]">Dipilih:</p>
-              <p className="text-sm font-medium text-[#0F172A] truncate">{selectedPlace.name}</p>
-              {selectedPlace.location.formatted_address && (
-                <p className="text-xs text-[#475569] truncate mt-0.5">
-                  {selectedPlace.location.formatted_address}
-                </p>
-              )}
+      {/* ── Route result panel ─────────────────────────── */}
+      {(routeResult || isRoutingLoading || routeError) && (
+        <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] shrink-0 p-4">
+          {isRoutingLoading && (
+            <div className="flex items-center gap-2 text-sm text-[#64748B]">
+              <Loader2 className="size-4 animate-spin text-[#1D4ED8]" />
+              Menghitung rute…
             </div>
-            <button
-              className="shrink-0 text-xs text-[#475569] underline tap-sm"
-              onClick={() => setSelectedPlace(null)}
-              aria-label="Batalkan pilihan tempat"
-            >
-              Batal
-            </button>
-          </div>
+          )}
+          {routeError && !isRoutingLoading && (
+            <p className="text-xs text-red-500">{routeError}</p>
+          )}
+          {routeResult && !isRoutingLoading && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold text-[#1D4ED8] uppercase tracking-wide">Rute ke</p>
+                  <p className="text-sm font-medium text-[#0F172A] line-clamp-1">{routeResult.destinationLabel}</p>
+                </div>
+                <button
+                  onClick={handleClearRoute}
+                  className="text-[#94A3B8] hover:text-[#475569] transition-colors"
+                  aria-label="Hapus rute"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white rounded-lg border border-[#E2E8F0] p-2 text-center">
+                  <p className="text-[10px] text-[#64748B] font-medium uppercase tracking-wide">Jarak</p>
+                  <p className="text-base font-bold text-[#0F172A]">
+                    {routeResult.distanceKm.toFixed(1)}{" "}
+                    <span className="text-xs font-normal text-[#475569]">km</span>
+                  </p>
+                </div>
+                <div className="bg-white rounded-lg border border-[#E2E8F0] p-2 text-center">
+                  <p className="text-[10px] text-[#64748B] font-medium uppercase tracking-wide">Estimasi</p>
+                  <p className="text-base font-bold text-[#0F172A]">
+                    {Math.round(routeResult.durationMin)}{" "}
+                    <span className="text-xs font-normal text-[#475569]">menit</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -196,7 +244,11 @@ export default function PlacesPage() {
 
   return (
     <AppShell sidebar={sidebar} pageTitle="Tempat">
-      <MapView />
+      <MapView
+        routeGeometry={routeResult?.geometry ?? null}
+        origin={origin}
+        destination={destination}
+      />
     </AppShell>
   );
 }

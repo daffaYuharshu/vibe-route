@@ -62,8 +62,10 @@ function normalize(raw: FoursquareRawPlace): FoursquarePlace {
   };
 }
 
+
 /**
  * Search for places near a coordinate using the Foursquare Places API (2025).
+ * Results are constrained to Indonesia using the ne/sw bounding box.
  *
  * Endpoint : https://places-api.foursquare.com/places/search
  * Auth     : Authorization: Bearer <FOURSQUARE_API_KEY>
@@ -90,6 +92,8 @@ export async function searchPlaces(
   url.searchParams.set('ll', `${lat},${lng}`);
   url.searchParams.set('radius', String(radius));
   url.searchParams.set('limit', String(limit));
+  // NOTE: Cannot combine ne/sw with ll per Foursquare API.
+  // Indonesia filtering is applied via post-response country check below.
   // Request all fields needed for FoursquarePlace shape
   url.searchParams.set(
     'fields',
@@ -128,8 +132,13 @@ export async function searchPlaces(
 
   const data = await response.json();
   const raw: FoursquareRawPlace[] = data.results ?? [];
-  const places = raw.map(normalize);
 
-  console.log(`[foursquare] Returned ${places.length} places`);
+  // Post-response filter: keep only places in Indonesia (country code 'ID')
+  // This is the safest approach since Foursquare doesn't support ne/sw + ll together.
+  const places = raw
+    .filter((r) => !r.location?.country || r.location.country === 'ID')
+    .map(normalize);
+
+  console.log(`[foursquare] Returned ${places.length} places (Indonesia only, filtered from ${raw.length})`);
   return places;
 }
